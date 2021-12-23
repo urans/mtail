@@ -81,11 +81,11 @@ func TestHandleLogTruncate(t *testing.T) {
 	f := testutil.TestOpenFile(t, logfile)
 
 	testutil.FatalIfErr(t, ta.TailPath(logfile))
+	// Expect to wake 1 wakee, the logstream reading `logfile`.
 	awaken(1)
 
 	testutil.WriteString(t, f, "a\nb\nc\n")
 	awaken(1)
-	awaken(1) // double sync to ensure that a whole pass through the filestream has occurred
 
 	if err := f.Truncate(0); err != nil {
 		t.Fatal(err)
@@ -154,21 +154,25 @@ func TestTailerOpenRetries(t *testing.T) {
 	if err := ta.TailPath(logfile); err == nil || !os.IsPermission(err) {
 		t.Fatalf("Expected a permission denied error here: %s", err)
 	}
-	testutil.FatalIfErr(t, ta.Poll())
+	testutil.FatalIfErr(t, ta.PollLogPatterns())
+	testutil.FatalIfErr(t, ta.PollLogStreamsForCompletion())
 	glog.Info("remove")
 	if err := os.Remove(logfile); err != nil {
 		t.Fatal(err)
 	}
-	testutil.FatalIfErr(t, ta.Poll())
+	testutil.FatalIfErr(t, ta.PollLogPatterns())
+	testutil.FatalIfErr(t, ta.PollLogStreamsForCompletion())
 	glog.Info("openfile")
 	f, err := os.OpenFile(logfile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0)
 	testutil.FatalIfErr(t, err)
-	testutil.FatalIfErr(t, ta.Poll())
+	testutil.FatalIfErr(t, ta.PollLogPatterns())
+	testutil.FatalIfErr(t, ta.PollLogStreamsForCompletion())
 	glog.Info("chmod")
 	if err := os.Chmod(logfile, 0666); err != nil {
 		t.Fatal(err)
 	}
-	testutil.FatalIfErr(t, ta.Poll())
+	testutil.FatalIfErr(t, ta.PollLogPatterns())
+	testutil.FatalIfErr(t, ta.PollLogStreamsForCompletion())
 	awaken(1) // force sync to EOF
 	glog.Info("write string")
 	testutil.WriteString(t, f, "\n")
@@ -248,7 +252,7 @@ func TestTailExpireStaleHandles(t *testing.T) {
 	}
 	testutil.ExpectNoDiff(t, expected, received, testutil.IgnoreFields(logline.LogLine{}, "Context"))
 
-	if err := ta.Gc(); err != nil {
+	if err := ta.ExpireStaleLogstreams(); err != nil {
 		t.Fatal(err)
 	}
 	ta.logstreamsMu.RLock()
@@ -259,7 +263,7 @@ func TestTailExpireStaleHandles(t *testing.T) {
 	// ta.logstreamsMu.Lock()
 	// ta.logstreams[log1].(*File).lastRead = time.Now().Add(-time.Hour*24 + time.Minute)
 	// ta.logstreamsMu.Unlock()
-	if err := ta.Gc(); err != nil {
+	if err := ta.ExpireStaleLogstreams(); err != nil {
 		t.Fatal(err)
 	}
 	ta.logstreamsMu.RLock()
@@ -270,7 +274,7 @@ func TestTailExpireStaleHandles(t *testing.T) {
 	// ta.logstreamsMu.Lock()
 	// ta.logstreams[log1].(*File).lastRead = time.Now().Add(-time.Hour*24 - time.Minute)
 	// ta.logstreamsMu.Unlock()
-	if err := ta.Gc(); err != nil {
+	if err := ta.ExpireStaleLogstreams(); err != nil {
 		t.Fatal(err)
 	}
 	ta.logstreamsMu.RLock()

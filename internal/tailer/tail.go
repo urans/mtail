@@ -95,7 +95,7 @@ type staleLogGcWaker struct {
 }
 
 func (opt staleLogGcWaker) apply(t *Tailer) error {
-	t.StartGcLoop(opt.Waker)
+	t.StartStaleLogstreamExpirationLoop(opt.Waker)
 	return nil
 }
 
@@ -284,8 +284,8 @@ func (t *Tailer) TailPath(pathname string) error {
 	return nil
 }
 
-// Gc removes logstreams that have had no reads for 24h or more.
-func (t *Tailer) Gc() error {
+// ExpireStaleLogstreams removes logstreams that have had no reads for 1h or more.
+func (t *Tailer) ExpireStaleLogstreams() error {
 	t.logstreamsMu.Lock()
 	defer t.logstreamsMu.Unlock()
 	for _, v := range t.logstreams {
@@ -296,8 +296,8 @@ func (t *Tailer) Gc() error {
 	return nil
 }
 
-// StartGcLoop runs a permanent goroutine to expire metrics every duration.
-func (t *Tailer) StartGcLoop(waker waker.Waker) {
+// StartStaleLogstreamExpirationLoop runs a permanent goroutine to expire stale logstreams.
+func (t *Tailer) StartStaleLogstreamExpirationLoop(waker waker.Waker) {
 	if waker == nil {
 		glog.Info("Log handle expiration disabled")
 		return
@@ -316,7 +316,7 @@ func (t *Tailer) StartGcLoop(waker waker.Waker) {
 			case <-t.ctx.Done():
 				return
 			case <-waker.Wake():
-				if err := t.Gc(); err != nil {
+				if err := t.ExpireStaleLogstreams(); err != nil {
 					glog.Info(err)
 				}
 			}
@@ -382,9 +382,9 @@ func (t *Tailer) PollLogPatterns() error {
 	return nil
 }
 
-// PollLogStreams looks at the existing paths and checks if they're already
+// PollLogStreamsForCompletion looks at the existing paths and checks if they're already
 // complete, removing it from the map if so.
-func (t *Tailer) PollLogStreams() error {
+func (t *Tailer) PollLogStreamsForCompletion() error {
 	t.logstreamsMu.Lock()
 	defer t.logstreamsMu.Unlock()
 	for name, l := range t.logstreams {
@@ -401,7 +401,7 @@ func (t *Tailer) PollLogStreams() error {
 func (t *Tailer) Poll() error {
 	t.pollMu.Lock()
 	defer t.pollMu.Unlock()
-	for _, f := range []func() error{t.PollLogPatterns, t.PollLogStreams} {
+	for _, f := range []func() error{t.PollLogPatterns, t.PollLogStreamsForCompletion} {
 		if err := f(); err != nil {
 			return err
 		}

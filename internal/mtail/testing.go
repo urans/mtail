@@ -105,7 +105,7 @@ func (ts *TestServer) PollWatched(n int) {
 		glog.Info(err)
 	}
 	glog.Infof("TestServer tailer gcing")
-	if err := ts.t.Gc(); err != nil {
+	if err := ts.t.ExpireStaleLogstreams(); err != nil {
 		glog.Info(err)
 	}
 	glog.Info("TestServer waking idle routines")
