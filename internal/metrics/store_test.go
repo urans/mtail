@@ -4,6 +4,7 @@
 package metrics
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -88,7 +89,7 @@ func TestAddMetricDifferentType(t *testing.T) {
 	}
 }
 
-func TestExpireMetric(t *testing.T) {
+func TestExpireOldDatum(t *testing.T) {
 	s := NewStore()
 	m := NewMetric("foo", "prog", Counter, Int, "a", "b", "c")
 	testutil.FatalIfErr(t, s.Add(m))
@@ -119,6 +120,72 @@ func TestExpireMetric(t *testing.T) {
 		t.Logf("Store: %#v", s)
 	}
 	lv = m.FindLabelValueOrNil([]string{"4", "5", "6"})
+	if lv == nil {
+		t.Errorf("lv expired")
+		t.Logf("Store: %#v", s)
+	}
+}
+
+func TestExpireOversizeDatum(t *testing.T) {
+	s := NewStore()
+	m := NewMetric("foo", "prog", Counter, Int, "foo")
+	m.Limit = 1
+	testutil.FatalIfErr(t, s.Add(m))
+
+	_, err := m.GetDatum("a")
+	testutil.FatalIfErr(t, err)
+	testutil.FatalIfErr(t, s.Gc())
+
+	_, err = m.GetDatum("b")
+	testutil.FatalIfErr(t, err)
+	testutil.FatalIfErr(t, s.Gc())
+
+	_, err = m.GetDatum("c")
+	testutil.FatalIfErr(t, err)
+	testutil.FatalIfErr(t, s.Gc())
+
+	if len(m.LabelValues) > 2 {
+		t.Errorf("Expected 2 labelvalues got %#v", m.LabelValues)
+	}
+	if x := m.FindLabelValueOrNil([]string{"a"}); x != nil {
+		t.Errorf("found label a which is unexpected: %#v", x)
+	}
+}
+
+func TestExpireManyMetrics(t *testing.T) {
+	s := NewStore()
+	m := NewMetric("foo", "prog", Counter, Int, "id")
+	testutil.FatalIfErr(t, s.Add(m))
+	d, err := m.GetDatum("0")
+	if err != nil {
+		t.Error(err)
+	}
+	datum.SetInt(d, 1, time.Now().Add(-time.Hour))
+	lv := m.FindLabelValueOrNil([]string{"0"})
+	if lv == nil {
+		t.Fatal("couldn't find lv")
+	}
+
+	for i := 1; i < 10; i++ {
+		d, err := m.GetDatum(strconv.Itoa(i))
+		if err != nil {
+			t.Error(err)
+		}
+		datum.SetInt(d, 1, time.Now().Add(-time.Hour))
+		lv = m.FindLabelValueOrNil([]string{strconv.Itoa(i)})
+		if lv == nil {
+			t.Fatal("couldn't find lv")
+		}
+		lv.Expiry = time.Minute
+	}
+
+	testutil.FatalIfErr(t, s.Gc())
+	lv = m.FindLabelValueOrNil([]string{"8"})
+	if lv != nil {
+		t.Errorf("lv not expired: %#v", lv)
+		t.Logf("Store: %#v", s)
+	}
+	lv = m.FindLabelValueOrNil([]string{"0"})
 	if lv == nil {
 		t.Errorf("lv expired")
 		t.Logf("Store: %#v", s)
