@@ -109,20 +109,6 @@ func (opt overrideLocation) apply(m *Server) error {
 	return nil
 }
 
-// StaleLogGcWaker triggers garbage collection runs for stale logs in the tailer.
-func StaleLogGcWaker(w waker.Waker) Option {
-	return &staleLogGcWaker{w}
-}
-
-type staleLogGcWaker struct {
-	waker.Waker
-}
-
-func (opt staleLogGcWaker) apply(m *Server) error {
-	m.tOpts = append(m.tOpts, tailer.StaleLogGcWaker(opt.Waker))
-	return nil
-}
-
 // LogPatternPollWaker triggers polls on the filesystem for new logs that match the log glob patterns.
 func LogPatternPollWaker(w waker.Waker) Option {
 	return &logPatternPollWaker{w}
@@ -164,6 +150,7 @@ var OneShot = &niladicOption{
 	func(m *Server) error {
 		m.rOpts = append(m.rOpts, runtime.ErrorsAbort())
 		m.tOpts = append(m.tOpts, tailer.OneShot)
+		m.eOpts = append(m.eOpts, exporter.DisableExport())
 		m.oneShot = true
 		return nil
 	},
@@ -173,6 +160,7 @@ var OneShot = &niladicOption{
 var CompileOnly = &niladicOption{
 	func(m *Server) error {
 		m.rOpts = append(m.rOpts, runtime.CompileOnly())
+		m.eOpts = append(m.eOpts, exporter.DisableExport())
 		m.compileOnly = true
 		return nil
 	},
@@ -186,7 +174,7 @@ var DumpAst = &niladicOption{
 	},
 }
 
-// DumpAstTypes instructs the Server's copmiler to print the AST after type checking.
+// DumpAstTypes instructs the Server's compiler to print the AST after type checking.
 var DumpAstTypes = &niladicOption{
 	func(m *Server) error {
 		m.rOpts = append(m.rOpts, runtime.DumpAstTypes())
@@ -261,7 +249,7 @@ var LogRuntimeErrors = &niladicOption{
 // JaegerReporter creates a new jaeger reporter that sends to the given Jaeger endpoint address.
 type JaegerReporter string
 
-func (opt JaegerReporter) apply(m *Server) error {
+func (opt JaegerReporter) apply(_ *Server) error {
 	je, err := jaeger.NewExporter(jaeger.Options{
 		CollectorEndpoint: string(opt),
 		Process: jaeger.Process{

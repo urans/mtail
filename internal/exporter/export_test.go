@@ -9,7 +9,6 @@ import (
 	"reflect"
 	"sort"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -22,31 +21,27 @@ const prefix = "prefix"
 
 func TestCreateExporter(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	_, err := New(ctx, &wg, nil)
-	if err == nil {
-		t.Error("expecting error, got nil")
-	}
-	cancel()
-	wg.Wait()
-	ctx, cancel = context.WithCancel(context.Background())
+	defer cancel()
 	store := metrics.NewStore()
-	_, err = New(ctx, &wg, store)
+
+	e, err := New(ctx, store)
 	if err != nil {
-		t.Errorf("unexpected error:%s", err)
+		t.Errorf("New(ctx, store) unexpected error: %v", err)
 	}
-	cancel()
-	wg.Wait()
-	ctx, cancel = context.WithCancel(context.Background())
+	e.Stop()
+
 	failopt := func(*Exporter) error {
 		return errors.New("busted") // nolint:goerr113
 	}
-	_, err = New(ctx, &wg, store, failopt)
+	_, err = New(ctx, store, failopt)
 	if err == nil {
-		t.Errorf("unexpected success")
+		t.Error("New(ctx, store, fail) -> unexpected success")
 	}
-	cancel()
-	wg.Wait()
+
+	_, err = New(ctx, nil)
+	if err == nil {
+		t.Error("New(ctx, nil) -> nil, expecting error")
+	}
 }
 
 func FakeSocketWrite(f formatter, m *metrics.Metric) []string {

@@ -6,7 +6,6 @@
 [![GoDoc](https://godoc.org/github.com/google/mtail?status.png)](http://godoc.org/github.com/google/mtail)
 [![Go Report Card](https://goreportcard.com/badge/github.com/google/mtail)](https://goreportcard.com/report/github.com/google/mtail)
 [![OSS-Fuzz](https://oss-fuzz-build-logs.storage.googleapis.com/badges/mtail.svg)](https://bugs.chromium.org/p/oss-fuzz/issues/list?sort=-opened&can=1&q=proj:mtail)
-[![CirrusCI Build Status](https://api.cirrus-ci.com/github/google/mtail.svg)](https://cirrus-ci.com/github/google/mtail)
 [![codecov](https://codecov.io/gh/google/mtail/branch/main/graph/badge.svg)](https://codecov.io/gh/google/mtail)
 
 `mtail` is a tool for extracting metrics from application logs to be exported
@@ -76,14 +75,14 @@ build dependency installation, if you don't care for that.
 
 ## Deployment
 
-`mtail` works best when it paired with a timeseries-based calculator and
+`mtail` works best when paired with a timeseries-based calculator and
 alerting tool, like [Prometheus](http://prometheus.io).
 
 > So what you do is you take the metrics from the log files and
 > you bring them down to the monitoring system?
 
 [It deals with the instrumentation so the engineers don't have
-to!](http://www.imdb.com/title/tt0151804/quotes/qt0386890)  It has the
+to!](http://www.imdb.com/title/tt0151804/quotes/?item=qt0386890)  It has the
 extraction skills!  It is good at dealing with log files!!
 
 ## Read More
@@ -111,4 +110,11 @@ Read more about deploying `mtail` and your programs in a monitoring environment
 * [Troubleshooting](docs/Troubleshooting.md)
 * [FAQ](docs/faq.md)
 
-After that, if you have any questions, please email (and optionally join) the mailing list: https://groups.google.com/forum/#!forum/mtail-users or [file a new issue](https://github.com/google/mtail/issues/new).
+
+## Getting more help and reporting defects
+
+If you have any questions, please use the [GitHub Discussions Q&A](https://github.com/google/mtail/discussions/new?category=q-a).
+
+We also have an email list : https://groups.google.com/forum/#!forum/mtail-users
+
+For any defects please [file a new issue](https://github.com/google/mtail/issues/new).

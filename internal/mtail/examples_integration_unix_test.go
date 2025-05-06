@@ -2,7 +2,6 @@
 // This file is available under the Apache license.
 
 //go:build unix
-// +build unix
 
 package mtail_test
 
@@ -28,7 +27,6 @@ import (
 )
 
 // TestFilePipeStreamComparison is a unix-specific test since unix.Mkfifo is not defined on Windows.
-// Two mtails both alike in dignity.
 func TestFilePipeStreamComparison(t *testing.T) {
 	testutil.SkipIfShort(t)
 
@@ -49,6 +47,8 @@ func TestFilePipeStreamComparison(t *testing.T) {
 
 				var wg sync.WaitGroup
 				wg.Add(3)
+				// This goroutine copies bytes from the source file into the
+				// fifo, once the fifo has been opened for read.
 				go func() {
 					defer wg.Done()
 					source, err := os.OpenFile(tc.logfile, os.O_RDONLY, 0)
@@ -63,6 +63,7 @@ func TestFilePipeStreamComparison(t *testing.T) {
 					pipe.Close()
 				}()
 
+				// Two mtails both alike in dignity.
 				go func() {
 					defer wg.Done()
 					fileMtail, err := mtail.New(ctx, fileStore, mtail.ProgramPath(programFile), mtail.LogPathPatterns(tc.logfile), mtail.OneShot, mtail.OmitMetricSource, mtail.LogPatternPollWaker(waker), mtail.LogstreamPollWaker(waker))
@@ -73,10 +74,10 @@ func TestFilePipeStreamComparison(t *testing.T) {
 						t.Error(err)
 					}
 				}()
-				pipeMtail, err := mtail.New(ctx, pipeStore, mtail.ProgramPath(programFile), mtail.LogPathPatterns(pipeName), mtail.OneShot, mtail.OmitMetricSource, mtail.LogPatternPollWaker(waker), mtail.LogstreamPollWaker(waker))
-				testutil.FatalIfErr(t, err)
 				go func() {
 					defer wg.Done()
+					pipeMtail, err := mtail.New(ctx, pipeStore, mtail.ProgramPath(programFile), mtail.LogPathPatterns(pipeName), mtail.OneShot, mtail.OmitMetricSource, mtail.LogPatternPollWaker(waker), mtail.LogstreamPollWaker(waker))
+					testutil.FatalIfErr(t, err)
 					if err := pipeMtail.Run(); err != nil {
 						t.Error(err)
 					}
@@ -148,7 +149,7 @@ func TestFileSocketStreamComparison(t *testing.T) {
 						defer wg.Done()
 						source, err := os.OpenFile(tc.logfile, os.O_RDONLY, 0)
 						testutil.FatalIfErr(t, err)
-						s, err := net.DialUnix(scheme, nil, &net.UnixAddr{sockName, scheme})
+						s, err := net.DialUnix(scheme, nil, &net.UnixAddr{Name: sockName, Net: scheme})
 						testutil.FatalIfErr(t, err)
 						n, err := io.Copy(s, source)
 						testutil.FatalIfErr(t, err)

@@ -6,6 +6,7 @@ on:
     branches:
       - main
   pull_request:
+  merge_group:
 env:
   GOPROXY: "https://proxy.golang.org"
 
@@ -20,9 +21,13 @@ jobs:
   test:
     strategy:
       matrix:
-        runs-on: [ubuntu-latest, macos-latest, windows-latest]
+        # macos-latest is slow and has weird test failures with unixgram message sizes, so it's been disabled.
+        # Sync with matrix in ci-done.yml
+        runs-on: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.runs-on }}
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
@@ -49,14 +54,16 @@ jobs:
         with:
           file: coverprofile
       - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-results
+          name: test-results-${{ matrix.runs-on }}
           path: test-results/
 
   container:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # so that we get tags
@@ -69,6 +76,7 @@ jobs:
     permissions:
       security-events: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/checkout@v4
       - uses: securego/gosec@master
         with:
@@ -87,8 +95,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: '^1.x'
+      - uses: actions/cache@v4
       - uses: actions/cache@v4
         id: cache
         with:

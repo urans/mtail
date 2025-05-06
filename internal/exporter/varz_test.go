@@ -5,10 +5,9 @@ package exporter
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 	"time"
 
@@ -73,26 +72,27 @@ func TestHandleVarz(t *testing.T) {
 	for _, tc := range handleVarzTests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			var wg sync.WaitGroup
 			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
 			ms := metrics.NewStore()
 			for _, metric := range tc.metrics {
 				testutil.FatalIfErr(t, ms.Add(metric))
 			}
-			e, err := New(ctx, &wg, ms, Hostname("gunstar"))
+			e, err := New(ctx, ms, Hostname("gunstar"))
 			testutil.FatalIfErr(t, err)
 			response := httptest.NewRecorder()
 			e.HandleVarz(response, &http.Request{})
 			if response.Code != 200 {
 				t.Errorf("response code not 200: %d", response.Code)
 			}
-			b, err := ioutil.ReadAll(response.Body)
+			b, err := io.ReadAll(response.Body)
 			if err != nil {
 				t.Errorf("failed to read response: %s", err)
 			}
 			testutil.ExpectNoDiff(t, tc.expected, string(b))
-			cancel()
-			wg.Wait()
+
+			e.Stop()
 		})
 	}
 }

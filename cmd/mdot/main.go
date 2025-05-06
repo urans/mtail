@@ -6,11 +6,11 @@ Command mdot turns an mtail program AST into a graphviz graph on standard output
 
 To use, run it like (assuming your shell is in the same directory as this file)
 
-  go run github.com/google/mtail/cmd/mdot --prog ../../examples/dhcpd.mtail | xdot -
+	go run github.com/google/mtail/cmd/mdot --prog ../../examples/dhcpd.mtail | xdot -
 
 or
 
-  go run github.com/google/mtail/cmd/mdot --prog ../../examples/dhcpd.mtail --http_port 8080
+	go run github.com/google/mtail/cmd/mdot --prog ../../examples/dhcpd.mtail --http_port 8080
 
 to view the dot output visit http://localhost:8080
 
@@ -163,7 +163,7 @@ func main() {
 	}
 
 	http.HandleFunc("/",
-		func(w http.ResponseWriter, r *http.Request) {
+		func(w http.ResponseWriter, _ *http.Request) {
 			dot := exec.Command("dot", "-Tsvg")
 			in, err := dot.StdinPipe()
 			if err != nil {

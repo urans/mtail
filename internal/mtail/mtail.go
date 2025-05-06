@@ -21,6 +21,7 @@ import (
 	"github.com/google/mtail/internal/tailer"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
+	vc "github.com/prometheus/client_golang/prometheus/collectors/version"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/version"
 	"go.opencensus.io/zpages"
@@ -28,9 +29,12 @@ import (
 
 // Server contains the state of the main mtail program.
 type Server struct {
-	ctx   context.Context
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	wg sync.WaitGroup // wait for main processes to shutdown
+
 	store *metrics.Store // Metrics storage
-	wg    sync.WaitGroup // wait for main processes to shutdown
 
 	tOpts []tailer.Option    // options for constructing `t`
 	t     *tailer.Tailer     // t manages log patterns and log streams, which sends lines to the VMs
@@ -54,6 +58,9 @@ type Server struct {
 	httpInfoEndpoints  bool   // if set, mtail will enable info endpoints for progz and varz
 }
 
+// We can only copy the build info once to the version library.  Protects tests from data races.
+var buildInfoOnce sync.Once
+
 // initRuntime constructs a new runtime and performs the initial load of program files in the program directory.
 func (m *Server) initRuntime() (err error) {
 	m.r, err = runtime.New(m.lines, &m.wg, m.programPath, m.store, m.rOpts...)
@@ -62,22 +69,20 @@ func (m *Server) initRuntime() (err error) {
 
 // initExporter sets up an Exporter for this Server.
 func (m *Server) initExporter() (err error) {
-	if m.oneShot {
-		// This is a hack to avoid a race in test, but assume that in oneshot
-		// mode we don't want to export anything.
-		return nil
-	}
-	m.e, err = exporter.New(m.ctx, &m.wg, m.store, m.eOpts...)
+	m.e, err = exporter.New(m.ctx, m.store, m.eOpts...)
 	if err != nil {
 		return err
 	}
 	m.reg.MustRegister(m.e)
 
 	// Create mtail_build_info metric.
-	version.Branch = m.buildInfo.Branch
-	version.Version = m.buildInfo.Version
-	version.Revision = m.buildInfo.Revision
-	m.reg.MustRegister(version.NewCollector("mtail"))
+	buildInfoOnce.Do(func() {
+		version.Branch = m.buildInfo.Branch
+		version.Version = m.buildInfo.Version
+		version.Revision = m.buildInfo.Revision
+	})
+	m.reg.MustRegister(vc.NewCollector("mtail"))
+
 	return nil
 }
 
@@ -118,7 +123,11 @@ func (m *Server) initHTTPServer() error {
 	zpages.Handle(mux, "/")
 
 	srv := &http.Server{
-		Handler: mux,
+		ReadTimeout:       1 * time.Second,
+		WriteTimeout:      5 * time.Second,
+		IdleTimeout:       30 * time.Second,
+		ReadHeaderTimeout: 2 * time.Second,
+		Handler:           mux,
 	}
 
 	var wg sync.WaitGroup
@@ -166,13 +175,13 @@ func (m *Server) initHTTPServer() error {
 // block until quit, once TestServer.PollWatched is addressed.
 func New(ctx context.Context, store *metrics.Store, options ...Option) (*Server, error) {
 	m := &Server{
-		ctx:   ctx,
 		store: store,
 		lines: make(chan *logline.LogLine),
 		// Using a non-pedantic registry means we can be looser with metrics that
 		// are not fully specified at startup.
 		reg: prometheus.NewRegistry(),
 	}
+	m.ctx, m.cancel = context.WithCancel(ctx)
 	m.rOpts = append(m.rOpts, runtime.PrometheusRegisterer(m.reg))
 
 	// TODO(jaq): Should these move to initExporter?
@@ -200,12 +209,14 @@ func New(ctx context.Context, store *metrics.Store, options ...Option) (*Server,
 	if err := m.initExporter(); err != nil {
 		return nil, err
 	}
+	//nolint:contextcheck // TODO
 	if err := m.initRuntime(); err != nil {
 		return nil, err
 	}
 	if err := m.initTailer(); err != nil {
 		return nil, err
 	}
+	//nolint:contextcheck // TODO
 	if err := m.initHTTPServer(); err != nil {
 		return nil, err
 	}
@@ -226,6 +237,7 @@ func (m *Server) SetOption(options ...Option) error {
 // TODO(jaq): remove this once the test server is able to trigger polls on the components.
 func (m *Server) Run() error {
 	m.wg.Wait()
+	m.cancel()
 	if m.compileOnly {
 		glog.Info("compile-only is set, exiting")
 		return nil

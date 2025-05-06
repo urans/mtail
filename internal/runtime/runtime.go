@@ -11,7 +11,6 @@ import (
 	"crypto/sha256"
 	"expvar"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -58,7 +57,7 @@ func (r *Runtime) LoadAllPrograms() error {
 	}
 	switch {
 	case s.IsDir():
-		fis, rerr := ioutil.ReadDir(r.programPath)
+		dirents, rerr := os.ReadDir(r.programPath)
 		if rerr != nil {
 			return errors.Wrapf(rerr, "Failed to list programs in %q", r.programPath)
 		}
@@ -70,19 +69,19 @@ func (r *Runtime) LoadAllPrograms() error {
 			markDeleted[name] = struct{}{}
 		}
 		r.handleMu.RUnlock()
-		for _, fi := range fis {
-			if fi.IsDir() {
+		for _, dirent := range dirents {
+			if dirent.IsDir() {
 				continue
 			}
-			err = r.LoadProgram(filepath.Join(r.programPath, fi.Name()))
+			err = r.LoadProgram(filepath.Join(r.programPath, dirent.Name()))
 			if err != nil {
 				if r.errorsAbort {
 					return err
 				}
 				glog.Warning(err)
 			}
-			glog.Infof("unmarking %s", filepath.Base(fi.Name()))
-			delete(markDeleted, filepath.Base(fi.Name()))
+			glog.Infof("unmarking %s", filepath.Base(dirent.Name()))
+			delete(markDeleted, filepath.Base(dirent.Name()))
 		}
 		for name := range markDeleted {
 			glog.Infof("unloading %s", name)
@@ -163,7 +162,7 @@ func (r *Runtime) CompileAndRun(name string, input io.Reader) error {
 	}
 	if obj == nil {
 		ProgLoadErrors.Add(name, 1)
-		return errors.Errorf("Internal error: Compilation failed for %s: No program returned, but no errors.", name)
+		return errors.Errorf("internal error: compilation failed for %s: no program returned, but no errors", name)
 	}
 	v := vm.New(name, obj, r.syslogUseCurrentYear, r.overrideLocation, r.logRuntimeErrors, r.trace)
 
@@ -242,10 +241,18 @@ type Runtime struct {
 	signalQuit chan struct{} // When closed stops the signal handler goroutine.
 }
 
+var (
+	ErrNeedsStore     = errors.New("loader needs a store")
+	ErrNeedsWaitgroup = errors.New("loader needs a WaitGroup")
+)
+
 // New creates a new program loader that reads programs from programPath.
 func New(lines <-chan *logline.LogLine, wg *sync.WaitGroup, programPath string, store *metrics.Store, options ...Option) (*Runtime, error) {
 	if store == nil {
-		return nil, errors.New("loader needs a store")
+		return nil, ErrNeedsStore
+	}
+	if wg == nil {
+		return nil, ErrNeedsWaitgroup
 	}
 	r := &Runtime{
 		ms:            store,
@@ -286,6 +293,7 @@ func New(lines <-chan *logline.LogLine, wg *sync.WaitGroup, programPath string, 
 			r.handleMu.RUnlock()
 		}
 		glog.Info("END OF LINE")
+		glog.Infof("processed %s lines", LineCount.String())
 		close(r.signalQuit)
 		r.handleMu.Lock()
 		for prog := range r.handles {

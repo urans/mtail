@@ -6,7 +6,11 @@ on:
       - completed
 jobs:
   comment:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Sync with matrix in ci.yml
+        runs-on: [ubuntu-latest]
+    runs-on: ${{ matrix.runs-on }}
     permissions:
       # list and download
       actions: read
@@ -24,7 +28,7 @@ jobs:
                run_id: ${{github.event.workflow_run.id }},
             });
             var matchArtifact = artifacts.data.artifacts.filter((artifact) => {
-              return artifact.name == "test-results"
+              return artifact.name == "test-results-${{ matrix.runs-on }}"
             })[0];
             var download = await github.rest.actions.downloadArtifact({
                owner: context.repo.owner,
@@ -38,8 +42,8 @@ jobs:
         run: |
           mkdir -p test-results
           unzip -d test-results test-results.zip
-          echo "::set-output name=sha::$(cat test-results/sha-number)"
-      - uses: docker://ghcr.io/enricomi/publish-unit-test-result-action:v1.6
+          echo "sha=$(cat test-results/sha-number)" >> $GITHUB_OUTPUT
+      - uses: EnricoMi/publish-unit-test-result-action@v2
         with:
           commit: ${{ steps.unpack.outputs.sha }}
           check_name: Unit Test Results

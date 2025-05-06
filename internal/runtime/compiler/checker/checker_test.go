@@ -68,6 +68,13 @@ var checkerInvalidPrograms = []struct {
 	},
 
 	{
+		"subst invalid regex",
+		`subst(/foo(/, "", "")
+`,
+		[]string{"subst invalid regex:1:7-12: error parsing regexp: missing closing ): `foo(`"},
+	},
+
+	{
 		"duplicate declaration",
 		"counter foo\ncounter foo\n",
 		[]string{
@@ -276,6 +283,13 @@ m`,
 	},
 
 	{
+		"subst regexp too long",
+		"subst(/" + strings.Repeat("c", 1025) + `/, "", "")
+`,
+		[]string{"subst regexp too long:1:7-1033: Exceeded maximum regular expression pattern length of 1024 bytes with 1025.", "\tExcessively long patterns are likely to cause compilation and runtime performance problems."},
+	},
+
+	{
 		"strptime invalid args",
 		`strptime("",8)
 `,
@@ -337,6 +351,13 @@ l++=l
 `,
 		[]string{"negate None:1:2-17: type mismatch; expected Int received None for `~' operator."},
 	},
+
+	// 	{"match against gauge",
+	// 		`gauge t
+	// t = 6 =~ t
+	// `,
+	// 		[]string{"match against gauge:2:5-10: Parameter to MATCH has a type mismatch; expected Pattern received Numeric."},
+	// 	},
 }
 
 func TestCheckInvalidPrograms(t *testing.T) {
@@ -569,6 +590,11 @@ foo = subst(",", "", $1)
 }`},
 	{"regexp subst", `
 subst(/\d+/, "d", "1234")
+`},
+	{"regexp subst twice", `
+text value
+value = subst(/[a-zA-Z]+/, "a", "1234abcd")
+value = subst(/\d+/, "d", value)
 `},
 }
 

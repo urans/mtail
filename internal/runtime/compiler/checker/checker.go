@@ -35,6 +35,7 @@ type checker struct {
 	tooDeep           bool
 	maxRecursionDepth int
 	maxRegexLength    int
+	noRegexSymbols    bool
 }
 
 // Check performs a semantic check of the astNode, and returns a potentially
@@ -81,6 +82,12 @@ func (c *checker) VisitBefore(node ast.Node) (ast.Visitor, ast.Node) {
 		n.Scope = symbol.NewScope(c.scope)
 		c.scope = n.Scope
 		glog.V(2).Infof("Created new scope %v in condstmt", n.Scope)
+		return c, n
+
+	case *ast.BuiltinExpr:
+		if n.Name == "subst" {
+			c.noRegexSymbols = true
+		}
 		return c, n
 
 	case *ast.CaprefTerm:
@@ -359,7 +366,7 @@ func (c *checker) VisitAfter(node ast.Node) ast.Node {
 			if types.AsTypeError(rType, &err) {
 				// Change the type mismatch error to make more sense in this context.
 				if goerrors.Is(err, types.ErrTypeMismatch) {
-					c.errors.Add(n.Pos(), fmt.Sprintf("type mismatch; can't apply %s to LHS of type %q with RHS of type %q.", parser.Kind(n.Op), lT, rT))
+					c.errors.Add(n.Pos(), fmt.Sprintf("type mismatch: can't apply %s to LHS of type %q with RHS of type %q.", parser.Kind(n.Op), lT, rT))
 				} else {
 					c.errors.Add(n.Pos(), err.Error())
 				}
@@ -443,7 +450,7 @@ func (c *checker) VisitAfter(node ast.Node) ast.Node {
 			var err *types.TypeError
 			if types.AsTypeError(uType, &err) {
 				if goerrors.Is(err, types.ErrTypeMismatch) {
-					c.errors.Add(n.Pos(), fmt.Sprintf("Boolean types expected for bitwise %s, got %s and %s", parser.Kind(n.Op), lT, rT))
+					c.errors.Add(n.Pos(), fmt.Sprintf("Boolean types expected for logical %s, got %s and %s", parser.Kind(n.Op), lT, rT))
 				} else {
 					c.errors.Add(n.Pos(), err.Error())
 				}
@@ -536,7 +543,7 @@ func (c *checker) VisitAfter(node ast.Node) ast.Node {
 			var err *types.TypeError
 			if types.AsTypeError(uType, &err) {
 				if goerrors.Is(err, types.ErrTypeMismatch) {
-					c.errors.Add(n.Pos(), fmt.Sprintf("%s for %s operator.", err, parser.Kind(n.Op)))
+					c.errors.Add(n.Pos(), fmt.Sprintf("Parameter to %s has a %s.", parser.Kind(n.Op), err))
 				} else {
 					c.errors.Add(n.Pos(), err.Error())
 				}
@@ -821,6 +828,10 @@ func (c *checker) VisitAfter(node ast.Node) ast.Node {
 				return n
 			}
 
+		case "subst":
+			c.noRegexSymbols = false
+			return n
+
 		case "tolower":
 			if !types.Equals(gotType.Args[0], types.String) {
 				c.errors.Add(n.Args.(*ast.ExprList).Children[0].Pos(), fmt.Sprintf("Expecting a String for argument 1 of tolower(), not %v.", gotType.Args[0]))
@@ -875,6 +886,10 @@ func (c *checker) checkRegex(pattern string, n ast.Node) {
 		return
 	}
 	if reAst, err := types.ParseRegexp(pattern); err == nil {
+		if c.noRegexSymbols {
+			return
+		}
+
 		// We reserve the names of the capturing groups as declarations
 		// of those symbols, so that future CAPREF tokens parsed can
 		// retrieve their value.  By recording them in the symbol table, we

@@ -64,7 +64,7 @@ func (m Kind) String() string {
 }
 
 // Generate implements the quick.Generator interface for Kind.
-func (Kind) Generate(rand *rand.Rand, size int) reflect.Value {
+func (Kind) Generate(rand *rand.Rand, _ int) reflect.Value {
 	return reflect.ValueOf(Kind(rand.Intn(int(endKind))))
 }
 
@@ -190,7 +190,10 @@ func (m *Metric) RemoveOldestDatum() {
 	}
 	if oldestLV != nil {
 		glog.V(1).Infof("removeOldest: removing oldest LV: %v", oldestLV)
-		m.RemoveDatum(oldestLV.Labels...)
+		err := m.RemoveDatum(oldestLV.Labels...)
+		if err != nil {
+			glog.Warning(err)
+		}
 	}
 }
 
