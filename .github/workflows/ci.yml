@@ -53,8 +53,8 @@ jobs:
         if: always()
         with:
           file: coverprofile
-      - uses: actions/upload-artifact@v4
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: test-results-${{ matrix.runs-on }}
