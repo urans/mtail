@@ -1,6 +1,6 @@
 module github.com/google/mtail
 
-go 1.24.2
+go 1.25.0
 
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.2.1
@@ -9,9 +9,9 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.2
-	github.com/prometheus/common v0.67.5
+	github.com/prometheus/common v0.68.1
 	go.opencensus.io v0.24.0
-	golang.org/x/sys v0.41.0
+	golang.org/x/sys v0.45.0
 )
 
 require (
@@ -22,7 +22,6 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/uber/jaeger-client-go v2.25.0+incompatible // indirect
-	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	google.golang.org/api v0.30.0 // indirect
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
